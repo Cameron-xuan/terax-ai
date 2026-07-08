@@ -1249,8 +1249,6 @@ export default function App() {
               filePath={activeFilePath}
               home={home}
               onCd={sendCd}
-              homeListingAllowed={homeRootAllowed}
-              onOpenFolder={handleOpenFolder}
               onWorkspaceChange={handleWorkspaceChange}
               onOpenMini={openMini}
               hasComposer={hasComposer}

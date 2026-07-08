@@ -22,8 +22,6 @@ type Props = {
   filePath?: string | null;
   home: string | null;
   onCd: (path: string) => void;
-  homeListingAllowed: boolean;
-  onOpenFolder: () => void;
   onWorkspaceChange: (env: WorkspaceEnv) => void;
   onOpenMini: () => void;
   /** Only rendered when the AI panel is open and a key is loaded. */
@@ -36,8 +34,6 @@ export function StatusBar({
   filePath,
   home,
   onCd,
-  homeListingAllowed,
-  onOpenFolder,
   onWorkspaceChange,
   onOpenMini,
   hasComposer,
@@ -50,14 +46,7 @@ export function StatusBar({
     <footer className="flex h-8 shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-card/60 pl-3 pr-4 text-[11px]">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
-        <CwdBreadcrumb
-          cwd={cwd}
-          filePath={filePath}
-          home={home}
-          onCd={onCd}
-          homeListingAllowed={homeListingAllowed}
-          onOpenFolder={onOpenFolder}
-        />
+        <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
         <LspStatusPill filePath={filePath ?? null} />
         <DiagnosticsBadge filePath={filePath ?? null} />
         {privateActive ? (

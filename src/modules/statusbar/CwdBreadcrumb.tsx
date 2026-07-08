@@ -31,9 +31,6 @@ type Props = {
   filePath?: string | null;
   home: string | null;
   onCd: (path: string) => void;
-  /** Same opt-in as the explorer tree: never list home until chosen. */
-  homeListingAllowed: boolean;
-  onOpenFolder: () => void;
 };
 
 function dirname(path: string): string {
@@ -47,14 +44,7 @@ function basename(path: string): string {
   return i === -1 ? path : path.slice(i + 1);
 }
 
-export function CwdBreadcrumb({
-  cwd,
-  filePath,
-  home,
-  onCd,
-  homeListingAllowed,
-  onOpenFolder,
-}: Props) {
+export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
   // File mode: dir segments navigate; filename is the terminal leaf.
   if (filePath) {
     const dir = dirname(filePath);
@@ -127,13 +117,24 @@ export function CwdBreadcrumb({
           </span>
         ))}
         <BreadcrumbItem>
-          <CurrentSegmentDropdown
-            label={current.label}
-            path={current.fullPath}
-            onCd={onCd}
-            listingBlocked={current.isHome && !homeListingAllowed}
-            onOpenFolder={onOpenFolder}
-          />
+          {current.isHome ? (
+            // Home gets no subfolder dropdown: never enumerate the user's
+            // personal folder from the breadcrumb.
+            <BreadcrumbPage className="flex items-center gap-1 text-foreground">
+              <HugeiconsIcon
+                icon={Home03Icon}
+                className="size-3"
+                strokeWidth={1.75}
+              />
+              Home
+            </BreadcrumbPage>
+          ) : (
+            <CurrentSegmentDropdown
+              label={current.label}
+              path={current.fullPath}
+              onCd={onCd}
+            />
+          )}
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
@@ -179,14 +180,10 @@ function CurrentSegmentDropdown({
   label,
   path,
   onCd,
-  listingBlocked,
-  onOpenFolder,
 }: {
   label: string;
   path: string;
   onCd: (p: string) => void;
-  listingBlocked: boolean;
-  onOpenFolder: () => void;
 }) {
   const showHidden = usePreferencesStore((s) => s.showHidden);
   const [open, setOpen] = useState(false);
@@ -209,8 +206,8 @@ function CurrentSegmentDropdown({
   }, [path, showHidden]);
 
   useEffect(() => {
-    if (open && !listingBlocked) load();
-  }, [open, listingBlocked, load]);
+    if (open) load();
+  }, [open, load]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -236,21 +233,7 @@ function CurrentSegmentDropdown({
         </BreadcrumbPage>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-        {listingBlocked ? (
-          <>
-            <div className="max-w-52 px-2 py-1.5 text-xs text-muted-foreground">
-              Home isn't listed until you pick a folder.
-            </div>
-            <DropdownMenuItem onSelect={onOpenFolder}>
-              <HugeiconsIcon
-                icon={Folder01Icon}
-                className="size-3.5 text-muted-foreground"
-                strokeWidth={1.75}
-              />
-              Open Folder…
-            </DropdownMenuItem>
-          </>
-        ) : children === null ? (
+        {children === null ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
             Loading…
           </div>
