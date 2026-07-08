@@ -32,11 +32,18 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 // Window starts hidden (per tauri.conf.json) so users never see a transparent
 // shadow-only frame before React paints. Use setTimeout — rAF is throttled
 // while the window is hidden and would never fire.
-const showWindow = () => {
-  getCurrentWindow()
-    .show()
-    .catch((e) => console.error("window.show failed:", e));
+// This script also reruns on webview reloads (dev HMR, WKWebView content
+// process restarts); show() on a minimized window yanks it out of the Dock,
+// so skip it there.
+const showWindow = async () => {
+  try {
+    const win = getCurrentWindow();
+    if (await win.isMinimized()) return;
+    await win.show();
+  } catch (e) {
+    console.error("window.show failed:", e);
+  }
 };
-setTimeout(showWindow, 50);
+setTimeout(() => void showWindow(), 50);
 // Safety net: if the first show somehow fails to take effect, force again.
-setTimeout(showWindow, 500);
+setTimeout(() => void showWindow(), 500);
