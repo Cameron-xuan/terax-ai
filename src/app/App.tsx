@@ -320,7 +320,12 @@ export default function App() {
   useThemeFileEditing({ tabsRef, openFileTab });
 
   const { explorerRoot, inheritedCwdForNewTab, setPickedRoot, pickedRoot } =
-    useWorkspaceCwd(activeTab, tabs, launchCwd ?? home);
+    useWorkspaceCwd(
+      activeTab,
+      spaceTabs,
+      activeSpaceId ?? DEFAULT_SPACE_ID,
+      launchCwd ?? home,
+    );
   // The explorer never auto-lists the home directory (the default root when
   // nothing was chosen); the user picks a folder or opts into home instead.
   const [homeRootAllowed, setHomeRootAllowed] = useState(false);
@@ -965,10 +970,7 @@ export default function App() {
     (id: string) => {
       const nextSpaceId = useSpaces.getState().remove(id);
       if (!nextSpaceId) return;
-      const root = useSpaces
-        .getState()
-        .spaces.find((s) => s.id === nextSpaceId)?.root;
-      removeTabsForSpace(id, nextSpaceId, root ?? undefined);
+      removeTabsForSpace(id, nextSpaceId);
     },
     [removeTabsForSpace],
   );

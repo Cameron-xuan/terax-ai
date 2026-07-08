@@ -13,39 +13,65 @@ type Result = {
   pickedRoot: string | null;
 };
 
+/**
+ * All state is keyed by space: an empty space starts with a null root and
+ * never inherits another space's terminal cwd.
+ */
 export function useWorkspaceCwd(
   activeTab: Tab | undefined,
-  tabs: Tab[],
+  spaceTabs: Tab[],
+  spaceId: string,
   home: string | null,
 ): Result {
-  const lastTerminalCwd = useRef<string | null>(null);
-  const [pickedRoot, setPickedRoot] = useState<string | null>(null);
+  const lastTerminalCwd = useRef<Map<string, string>>(new Map());
+  const [pickedRoots, setPickedRoots] = useState<Record<string, string | null>>(
+    {},
+  );
+  const pickedRoot = pickedRoots[spaceId] ?? null;
+
+  const setPickedRoot = useCallback(
+    (path: string | null) => {
+      setPickedRoots((prev) =>
+        prev[spaceId] === path ? prev : { ...prev, [spaceId]: path },
+      );
+    },
+    [spaceId],
+  );
 
   useEffect(() => {
     if (activeTab?.kind === "terminal" && activeTab.cwd) {
-      lastTerminalCwd.current = activeTab.cwd;
+      lastTerminalCwd.current.set(activeTab.spaceId, activeTab.cwd);
       // The active terminal is the source of truth again; the explicit
       // pick either got absorbed as its spawn cwd or was navigated away.
-      setPickedRoot(null);
+      setPickedRoots((prev) =>
+        prev[activeTab.spaceId] == null
+          ? prev
+          : { ...prev, [activeTab.spaceId]: null },
+      );
     }
   }, [activeTab]);
 
   const explorerRoot = useMemo<string | null>(() => {
     if (activeTab?.kind === "terminal" && activeTab.cwd) return activeTab.cwd;
     if (pickedRoot) return pickedRoot;
-    if (lastTerminalCwd.current) return lastTerminalCwd.current;
-    const anyTerm = tabs.find((t) => t.kind === "terminal" && t.cwd);
+    // An empty space shows the folder-pick empty state, not a stale root.
+    if (spaceTabs.length === 0) return null;
+    const last = lastTerminalCwd.current.get(spaceId);
+    if (last) return last;
+    const anyTerm = spaceTabs.find((t) => t.kind === "terminal" && t.cwd);
     if (anyTerm?.kind === "terminal" && anyTerm.cwd) return anyTerm.cwd;
     return home;
-  }, [activeTab, tabs, home, pickedRoot]);
+  }, [activeTab, spaceTabs, spaceId, home, pickedRoot]);
 
   const inheritedCwdForNewTab = useCallback((): string | undefined => {
     if (activeTab?.kind === "terminal" && activeTab.cwd) return activeTab.cwd;
-    // Editor tabs inherit the explicit pick, else the last terminal's cwd
-    // (or workspace home), not the file's folder — opening a new terminal
-    // from a file shouldn't hijack the user's working directory context.
-    return pickedRoot ?? lastTerminalCwd.current ?? home ?? undefined;
-  }, [activeTab, home, pickedRoot]);
+    // Editor tabs inherit the explicit pick, else the space's last terminal
+    // cwd (or home), not the file's folder — opening a new terminal from a
+    // file shouldn't hijack the user's working directory context.
+    return (
+      pickedRoot ?? lastTerminalCwd.current.get(spaceId) ?? home ?? undefined
+    );
+  }, [activeTab, spaceId, home, pickedRoot]);
 
   return { explorerRoot, inheritedCwdForNewTab, setPickedRoot, pickedRoot };
 }
