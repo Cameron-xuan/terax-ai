@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { isLocalUrl, toEmbedSrc } from "./lib/url";
 import {
   PreviewAddressBar,
   type PreviewAddressBarHandle,
@@ -100,7 +101,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
             loaded ? (
               <iframe
                 key={`${url}#${nonce}`}
-                src={url}
+                src={toEmbedSrc(url)}
                 title="Preview"
                 className="h-full w-full border-0"
                 // sandbox grants the bare minimum for a dev preview: scripts,
@@ -166,31 +167,15 @@ function EmptyState() {
           Nothing to preview yet
         </p>
         <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-          Type a URL above, or open the{" "}
+          Type a URL or a local file path above, or open the{" "}
           <span className="rounded bg-muted px-1 py-0.5 font-mono text-[10.5px]">
             Ports
           </span>{" "}
           dropdown to jump straight to your running dev server. Public sites
-          often block embedding — open them in your browser via the link icon
-          if you see a blank page.
+          often block embedding — open them in your browser via the link icon if
+          you see a blank page.
         </p>
       </div>
     </div>
   );
-}
-
-function isLocalUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    const h = u.hostname;
-    return (
-      h === "localhost" ||
-      h === "127.0.0.1" ||
-      h === "0.0.0.0" ||
-      h === "[::1]" ||
-      h.endsWith(".localhost")
-    );
-  } catch {
-    return false;
-  }
 }
