@@ -50,7 +50,9 @@ export function fileUrlToPath(url: string): string | null {
 // convertFileSrc percent-encodes the whole path into a single URL segment,
 // which collapses the document's directory structure and breaks relative
 // subresources (../assets/style.css would resolve against the protocol
-// root). Re-encode per segment so slashes survive.
+// root). Re-encode per segment so slashes survive. Tauri's handler skips
+// the first `/` of the URL path and uses the rest verbatim, so a unix path
+// keeps its own leading slash: asset://localhost//Users/...
 export function toEmbedSrc(url: string): string {
   const path = fileUrlToPath(url);
   if (!path) return url;
@@ -61,8 +63,7 @@ export function toEmbedSrc(url: string): string {
   const encoded = path
     .split("/")
     .map((seg) => (DRIVE_SEGMENT.test(seg) ? seg : encodeURIComponent(seg)))
-    .join("/")
-    .replace(/^\//, "");
+    .join("/");
   return prefix + encoded;
 }
 

@@ -94,15 +94,17 @@ describe("toEmbedSrc", () => {
     expect(toEmbedSrc("http://localhost:3000")).toBe("http://localhost:3000");
   });
 
-  it("keeps directory structure so relative subresources resolve", () => {
+  it("keeps directory structure and the path's own leading slash", () => {
+    // Tauri's asset handler strips exactly one leading `/` from the URL
+    // path, so the unix absolute path needs its own slash after the host.
     expect(toEmbedSrc("file:///Users/x/lessons/a.html")).toBe(
-      "asset://localhost/Users/x/lessons/a.html",
+      "asset://localhost//Users/x/lessons/a.html",
     );
   });
 
   it("encodes special characters per segment", () => {
     expect(toEmbedSrc("file:///Users/x/my%20page/a%23b.html")).toBe(
-      "asset://localhost/Users/x/my%20page/a%23b.html",
+      "asset://localhost//Users/x/my%20page/a%23b.html",
     );
   });
 
