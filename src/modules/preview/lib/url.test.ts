@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   fileUrlToPath,
   isLocalUrl,
   normalizeInput,
   pathToFileUrl,
+  toEmbedSrc,
 } from "./url";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (p: string) => `asset://localhost/${encodeURIComponent(p)}`,
+}));
 
 describe("normalizeInput", () => {
   it("returns null for blank input", () => {
@@ -81,6 +86,30 @@ describe("pathToFileUrl / fileUrlToPath round-trip", () => {
   it("fileUrlToPath rejects non-file URLs", () => {
     expect(fileUrlToPath("http://localhost:3000")).toBeNull();
     expect(fileUrlToPath("not a url")).toBeNull();
+  });
+});
+
+describe("toEmbedSrc", () => {
+  it("passes non-file URLs through", () => {
+    expect(toEmbedSrc("http://localhost:3000")).toBe("http://localhost:3000");
+  });
+
+  it("keeps directory structure so relative subresources resolve", () => {
+    expect(toEmbedSrc("file:///Users/x/lessons/a.html")).toBe(
+      "asset://localhost/Users/x/lessons/a.html",
+    );
+  });
+
+  it("encodes special characters per segment", () => {
+    expect(toEmbedSrc("file:///Users/x/my%20page/a%23b.html")).toBe(
+      "asset://localhost/Users/x/my%20page/a%23b.html",
+    );
+  });
+
+  it("keeps windows drive segments intact", () => {
+    expect(toEmbedSrc("file:///C:/www/a.html")).toBe(
+      "asset://localhost/C:/www/a.html",
+    );
   });
 });
 

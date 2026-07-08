@@ -47,9 +47,23 @@ export function fileUrlToPath(url: string): string | null {
 
 // file: URLs cannot load in an iframe from the app origin; the Tauri asset
 // protocol serves them instead (scope + CSP already allow it).
+// convertFileSrc percent-encodes the whole path into a single URL segment,
+// which collapses the document's directory structure and breaks relative
+// subresources (../assets/style.css would resolve against the protocol
+// root). Re-encode per segment so slashes survive.
 export function toEmbedSrc(url: string): string {
   const path = fileUrlToPath(url);
-  return path ? convertFileSrc(path) : url;
+  if (!path) return url;
+  const converted = convertFileSrc(path);
+  const flat = encodeURIComponent(path);
+  if (!converted.endsWith(flat)) return converted;
+  const prefix = converted.slice(0, converted.length - flat.length);
+  const encoded = path
+    .split("/")
+    .map((seg) => (DRIVE_SEGMENT.test(seg) ? seg : encodeURIComponent(seg)))
+    .join("/")
+    .replace(/^\//, "");
+  return prefix + encoded;
 }
 
 export function isLocalUrl(url: string): boolean {
