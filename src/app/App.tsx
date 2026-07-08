@@ -96,6 +96,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
+import { EmptySpaceState } from "./components/EmptySpaceState";
 import {
   TOGGLE_BLOCK_INPUT_EVENT,
   WorkspaceInputBar,
@@ -245,7 +246,13 @@ export default function App() {
       .spaces.find((s) => s.id === activeSpaceId);
     if (meta) void adoptWorkspaceEnv(meta.env);
     const inSpace = tabsRef.current.filter((t) => t.spaceId === activeSpaceId);
-    if (inSpace.length === 0) return;
+    if (inSpace.length === 0) {
+      // Empty space: no tab may stay active (it would keep rendering a tab
+      // from the previous space). -1 matches nothing; the surface shows the
+      // empty state until the user opens a module via +.
+      setActiveId(-1);
+      return;
+    }
     // Keep the active tab if it already belongs to the newly active space (a
     // cross-space jump set it explicitly); else fall to the space's last tab.
     if (inSpace.some((t) => t.id === activeId)) return;
@@ -312,11 +319,8 @@ export default function App() {
   useEditorFileSync({ tabs, tabsRef, editorRefs });
   useThemeFileEditing({ tabsRef, openFileTab });
 
-  const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
-    activeTab,
-    tabs,
-    launchCwd ?? home,
-  );
+  const { explorerRoot, inheritedCwdForNewTab, setPickedRoot, pickedRoot } =
+    useWorkspaceCwd(activeTab, tabs, launchCwd ?? home);
   // The explorer never auto-lists the home directory (the default root when
   // nothing was chosen); the user picks a folder or opts into home instead.
   const [homeRootAllowed, setHomeRootAllowed] = useState(false);
@@ -551,10 +555,20 @@ export default function App() {
       if (typeof picked !== "string") return;
       const path = picked.replace(/\\/g, "/");
       if (home && isSamePath(path, home)) setHomeRootAllowed(true);
+      // Never spawn a terminal for a folder pick: cd the active terminal if
+      // there is one, otherwise just move the workspace root.
       if (activeTerminalTab) sendCd(path);
-      else cdInNewTab(path);
+      else setPickedRoot(path);
     })();
-  }, [home, activeTerminalTab, sendCd, cdInNewTab]);
+  }, [home, activeTerminalTab, sendCd, setPickedRoot]);
+
+  const navigateWorkspace = useCallback(
+    (path: string) => {
+      if (activeTerminalTab) sendCd(path);
+      else setPickedRoot(path);
+    },
+    [activeTerminalTab, sendCd, setPickedRoot],
+  );
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean) => {
@@ -941,10 +955,11 @@ export default function App() {
       env: workspaceEnv,
     });
     setActiveSpaceForNewTabs(meta.id);
-    newTab(activeCwd ?? undefined);
+    // No auto terminal: the space opens empty and the user picks a module
+    // via +. The space-switch effect parks activeId on -1.
     setActive(meta.id);
     return meta.id;
-  }, [activeCwd, home, workspaceEnv, newTab, setActiveSpaceForNewTabs]);
+  }, [activeCwd, home, workspaceEnv, setActiveSpaceForNewTabs]);
 
   const handleDeleteSpace = useCallback(
     (id: string) => {
@@ -1225,6 +1240,7 @@ export default function App() {
                       onGitHistorySearchHandle={setGitHistoryHandle}
                       onSetMarkdownView={setMarkdownView}
                     />
+                    {spaceTabs.length === 0 ? <EmptySpaceState /> : null}
                   </div>
 
                   <WorkspaceInputBar
@@ -1245,10 +1261,10 @@ export default function App() {
 
           {!zenMode && (
             <StatusBar
-              cwd={activeCwd}
+              cwd={activeCwd ?? pickedRoot}
               filePath={activeFilePath}
               home={home}
-              onCd={sendCd}
+              onCd={navigateWorkspace}
               onWorkspaceChange={handleWorkspaceChange}
               onOpenMini={openMini}
               hasComposer={hasComposer}
