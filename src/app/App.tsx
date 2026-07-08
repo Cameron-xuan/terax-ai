@@ -32,7 +32,12 @@ import {
   NewEditorDialog,
   useEditorFileSync,
 } from "@/modules/editor";
-import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
+import {
+  FileExplorer,
+  type FileExplorerHandle,
+  isSamePath,
+  visibleExplorerRoot,
+} from "@/modules/explorer";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import {
   Header,
@@ -312,6 +317,14 @@ export default function App() {
     tabs,
     launchCwd ?? home,
   );
+  // The explorer never auto-lists the home directory (the default root when
+  // nothing was chosen); the user picks a folder or opts into home instead.
+  const [homeRootAllowed, setHomeRootAllowed] = useState(false);
+  const explorerRootPath = visibleExplorerRoot(
+    explorerRoot,
+    home,
+    homeRootAllowed,
+  );
 
   useWindowTitle(activeTab, explorerRoot);
 
@@ -527,6 +540,21 @@ export default function App() {
     },
     [newTab],
   );
+
+  const handleOpenFolder = useCallback(() => {
+    void (async () => {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const picked = await open({
+        directory: true,
+        defaultPath: home ?? undefined,
+      });
+      if (typeof picked !== "string") return;
+      const path = picked.replace(/\\/g, "/");
+      if (home && isSamePath(path, home)) setHomeRootAllowed(true);
+      if (activeTerminalTab) sendCd(path);
+      else cdInNewTab(path);
+    })();
+  }, [home, activeTerminalTab, sendCd, cdInNewTab]);
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean) => {
@@ -1143,7 +1171,7 @@ export default function App() {
                     {sidebarView === "explorer" ? (
                       <FileExplorer
                         ref={explorerRef}
-                        rootPath={explorerRoot}
+                        rootPath={explorerRootPath}
                         gitStatus={
                           explorerGitDecorations ? sourceControl.status : null
                         }
@@ -1153,6 +1181,7 @@ export default function App() {
                         onPathDeleted={handlePathDeleted}
                         onRevealInTerminal={cdInNewTab}
                         onAttachToAgent={handleAttachFileToAgent}
+                        onOpenFolder={handleOpenFolder}
                       />
                     ) : (
                       <SourceControlPanel
