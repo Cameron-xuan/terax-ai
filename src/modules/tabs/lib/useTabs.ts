@@ -159,8 +159,8 @@ export function pickTabBySpaceIndex(
   return pool[idx];
 }
 
-// Next active after close, scoped to the closing tab's space. null = last tab of
-// its space, which callers treat as "refuse to close".
+// Next active after close, scoped to the closing tab's space. -1 = the space
+// becomes empty (activeId parks on the empty state); null = unknown tab id.
 export function nextActiveInSpace(
   tabs: Tab[],
   closingId: number,
@@ -168,7 +168,7 @@ export function nextActiveInSpace(
   const closing = tabs.find((t) => t.id === closingId);
   if (!closing) return null;
   const sameSpace = tabs.filter((t) => t.spaceId === closing.spaceId);
-  if (sameSpace.length <= 1) return null;
+  if (sameSpace.length <= 1) return -1;
   const idx = sameSpace.findIndex((t) => t.id === closingId);
   return (sameSpace[idx - 1] ?? sameSpace[idx + 1]).id;
 }
@@ -289,8 +289,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ),
       );
       if (activeIdRef.current !== tabId) return false;
+      // -1 = origin space is now empty; follow the tab to its target space.
       const fallback = nextActiveInSpace(curr, tabId);
-      if (fallback !== null) {
+      if (fallback !== null && fallback !== -1) {
         setActiveId(fallback);
         return false;
       }
@@ -322,8 +323,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         return without;
       });
       if (!crossSpace || activeIdRef.current !== tabId) return false;
+      // -1 = origin space is now empty; follow the tab to its target space.
       const fallback = nextActiveInSpace(curr, tabId);
-      if (fallback !== null) {
+      if (fallback !== null && fallback !== -1) {
         setActiveId(fallback);
         return false;
       }
@@ -596,13 +598,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       );
       if (!target) return curr;
       const fallback = nextActiveInSpace(curr, target.id);
-      if (fallback === null) {
-        return curr.map((t) =>
-          t.kind === "ai-diff" && t.approvalId === approvalId
-            ? { ...t, status: "approved" as AiDiffStatus }
-            : t,
-        );
-      }
+      if (fallback === null) return curr;
       const next = curr.filter((t) => t.id !== target.id);
       setActiveId((active) => (target.id === active ? fallback : active));
       return next;

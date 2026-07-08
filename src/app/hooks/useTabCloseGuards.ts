@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react";
-import { leafHasForegroundProcess, leafIds } from "@/modules/terminal";
 import { nextActiveInSpace, type Tab } from "@/modules/tabs";
+import { leafHasForegroundProcess, leafIds } from "@/modules/terminal";
+import { useCallback, useState } from "react";
 
 type Params = {
   tabs: Tab[];
@@ -23,8 +23,7 @@ export function useTabCloseGuards({ tabs, disposeTab }: Params) {
 
   const handleClose = useCallback(
     async (id: number) => {
-      // Last tab in its space can't be closed (closeTab refuses). Skip the
-      // dialog entirely so confirming it doesn't appear to silently fail.
+      // null = unknown tab id, nothing to close.
       if (nextActiveInSpace(tabs, id) === null) return;
       const t = tabs.find((x) => x.id === id);
       if (t?.kind === "editor" && t.dirty) {
