@@ -276,27 +276,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     setActiveId(nextActiveId);
   }, []);
 
-  // Appends a cold terminal tab to a space without stealing focus, so the
-  // overview can populate a space in place; it spawns when first opened.
-  const newTabInSpace = useCallback((spaceId: string, cwd?: string) => {
-    const tabId = nextIdRef.current++;
-    const leafId = nextIdRef.current++;
-    setTabs((curr) => [
-      ...curr,
-      {
-        id: tabId,
-        kind: "terminal",
-        spaceId,
-        cold: true,
-        title: cwd ? basename(cwd) : "shell",
-        cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
-        activeLeafId: leafId,
-      },
-    ]);
-    return tabId;
-  }, []);
-
   // Reassigns a tab to another space. Returns true when the moved tab was active
   // and emptied its source space, so the caller should follow it into the target.
   const moveTabToSpace = useCallback(
@@ -1121,7 +1100,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     moveTabToSpace,
     reorderTab,
     reorderTabByGap,
-    newTabInSpace,
     removeTabsForSpace,
     markBooted,
     setActiveSpaceForNewTabs,

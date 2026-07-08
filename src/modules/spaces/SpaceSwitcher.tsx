@@ -10,7 +10,6 @@ import { labelFor, type Tab, TabIcon } from "@/modules/tabs";
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
-  Cancel01Icon,
   Delete02Icon,
   PencilEdit02Icon,
   PlusSignIcon,
@@ -30,9 +29,7 @@ type Props = {
   tabs: Tab[];
   onNewSpace: () => void;
   onDeleteSpace: (id: string) => void;
-  onNewTabInSpace: (spaceId: string) => void;
   onJumpTab: (id: number) => void;
-  onCloseTab: (id: number) => void;
   onMoveTabToSpace: (tabId: number, spaceId: string) => void;
   onReorderTab: (
     tabId: number,
@@ -77,9 +74,7 @@ export function SpaceSwitcher({
   tabs,
   onNewSpace,
   onDeleteSpace,
-  onNewTabInSpace,
   onJumpTab,
-  onCloseTab,
   onMoveTabToSpace,
   onReorderTab,
   onReorderSpaces,
@@ -189,13 +184,15 @@ export function SpaceSwitcher({
       return;
     }
     const rect = hit.getBoundingClientRect();
-    const edge: Edge = e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
+    const edge: Edge =
+      e.clientY < rect.top + rect.height / 2 ? "top" : "bottom";
     const kind = hit.getAttribute("data-drop");
     let next: DropTarget | null = null;
     if (st.kind === "space") {
       if (kind === "space") {
         const spaceId = hit.getAttribute("data-space-id");
-        if (spaceId && spaceId !== st.id) next = { kind: "space", spaceId, edge };
+        if (spaceId && spaceId !== st.id)
+          next = { kind: "space", spaceId, edge };
       }
     } else if (kind === "tab") {
       const tabId = Number(hit.getAttribute("data-tab-id"));
@@ -292,9 +289,7 @@ export function SpaceSwitcher({
               }}
               onCancelRename={() => setEditingId(null)}
               onDelete={() => onDeleteSpace(sp.id)}
-              onNewTab={() => onNewTabInSpace(sp.id)}
               onJumpTab={onJumpTab}
-              onCloseTab={onCloseTab}
             />
           ))}
         </div>
@@ -354,9 +349,7 @@ type SpaceRowProps = {
   onCommitRename: (name: string) => void;
   onCancelRename: () => void;
   onDelete: () => void;
-  onNewTab: () => void;
   onJumpTab: (id: number) => void;
-  onCloseTab: (id: number) => void;
 };
 
 function SpaceRow({
@@ -378,9 +371,7 @@ function SpaceRow({
   onCommitRename,
   onCancelRename,
   onDelete,
-  onNewTab,
   onJumpTab,
-  onCloseTab,
 }: SpaceRowProps) {
   const isDragging = dragging?.kind === "space" && dragging.id === space.id;
   const moveTarget = drop?.kind === "into-space" && drop.spaceId === space.id;
@@ -396,7 +387,9 @@ function SpaceRow({
         data-space-id={space.id}
         role="button"
         tabIndex={editing ? -1 : 0}
-        onPointerDown={editing ? undefined : (e) => onPointerDown(e, "space", space.id)}
+        onPointerDown={
+          editing ? undefined : (e) => onPointerDown(e, "space", space.id)
+        }
         onPointerMove={onPointerMove}
         onPointerUp={editing ? undefined : (e) => onPointerUp(e, onSwitch)}
         onPointerCancel={(e) => onPointerUp(e)}
@@ -459,7 +452,6 @@ function SpaceRow({
                 label="Rename space"
                 onClick={onStartRename}
               />
-              <RowAction icon={PlusSignIcon} label="New tab" onClick={onNewTab} />
               {canDelete && (
                 <RowAction
                   icon={Delete02Icon}
@@ -485,7 +477,6 @@ function SpaceRow({
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onJump={() => onJumpTab(t.id)}
-              onClose={() => onCloseTab(t.id)}
             />
           ))}
           {tabs.length === 0 && (
@@ -507,7 +498,6 @@ function TabRow({
   onPointerMove,
   onPointerUp,
   onJump,
-  onClose,
 }: {
   tab: Tab;
   dragging: { kind: "space" | "tab"; id: string | number } | null;
@@ -520,7 +510,6 @@ function TabRow({
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent, onActivate?: () => void) => void;
   onJump: () => void;
-  onClose: () => void;
 }) {
   const subtitle = subtitleFor(tab);
   const isDragging = dragging?.kind === "tab" && dragging.id === tab.id;
@@ -530,7 +519,7 @@ function TabRow({
   return (
     <div className="relative">
       {reorderEdge && <DropLine edge={reorderEdge} />}
-      {/* biome-ignore lint/a11y/useSemanticElements: drag row hosts a nested close button, cannot be a <button> */}
+      {/* biome-ignore lint/a11y/useSemanticElements: drag row uses pointer-capture drag handlers, cannot be a <button> */}
       <div
         data-drop="tab"
         data-tab-id={tab.id}
@@ -562,18 +551,6 @@ function TabRow({
             </span>
           )}
         </span>
-        <button
-          type="button"
-          data-no-drag
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          aria-label="Close tab"
-          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/tab:opacity-70 hover:opacity-100"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
-        </button>
       </div>
     </div>
   );

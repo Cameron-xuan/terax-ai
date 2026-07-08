@@ -116,7 +116,6 @@ export default function App() {
     moveTabToSpace,
     reorderTab,
     reorderTabByGap,
-    newTabInSpace,
     removeTabsForSpace,
     markBooted,
     setActiveSpaceForNewTabs,
@@ -994,16 +993,6 @@ export default function App() {
     [reorderTab],
   );
 
-  const handleNewTabInSpace = useCallback(
-    (spaceId: string) => {
-      const root = useSpaces
-        .getState()
-        .spaces.find((s) => s.id === spaceId)?.root;
-      newTabInSpace(spaceId, root ?? undefined);
-    },
-    [newTabInSpace],
-  );
-
   const jumpToTab = useCallback(
     (tabId: number) => {
       const t = tabsRef.current.find((x) => x.id === tabId);
@@ -1022,9 +1011,7 @@ export default function App() {
       tabs={tabs}
       onNewSpace={() => void handleNewSpace()}
       onDeleteSpace={handleDeleteSpace}
-      onNewTabInSpace={handleNewTabInSpace}
       onJumpTab={jumpToTab}
-      onCloseTab={handleClose}
       onMoveTabToSpace={handleMoveTab}
       onReorderTab={handleReorderTab}
       onReorderSpaces={(ids) => useSpaces.getState().reorder(ids)}
