@@ -92,7 +92,6 @@ import {
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
@@ -894,17 +893,13 @@ export default function App() {
 
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
-      const all = tabsRef.current;
-      const tab = all.find(
+      const tab = tabsRef.current.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
       if (!tab || tab.kind !== "terminal") return;
-      // Last pane of the last tab: quit instead of respawning a shell.
-      if (leafIds(tab.paneTree).length === 1 && all.length === 1) {
-        void getCurrentWindow().close();
-      } else {
-        closePaneByLeaf(leafId);
-      }
+      // Closing the last pane of the last tab lands on the empty state; the
+      // app never quits on its own when a shell exits.
+      closePaneByLeaf(leafId);
     },
     [closePaneByLeaf],
   );
