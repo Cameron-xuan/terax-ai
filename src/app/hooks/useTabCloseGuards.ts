@@ -78,9 +78,10 @@ export function useTabCloseGuards({ tabs, disposeTab }: Params) {
     (path: string) => {
       const dirty: number[] = [];
       for (const t of tabs) {
-        if (t.kind !== "editor") continue;
+        if (t.kind !== "editor" && t.kind !== "markdown") continue;
         if (t.path !== path && !t.path.startsWith(`${path}/`)) continue;
-        if (t.dirty) {
+        // Markdown preview tabs have no dirty state: close immediately.
+        if (t.kind === "editor" && t.dirty) {
           dirty.push(t.id);
         } else {
           disposeTab(t.id);
