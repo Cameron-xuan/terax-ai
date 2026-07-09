@@ -159,8 +159,8 @@ export function pickTabBySpaceIndex(
   return pool[idx];
 }
 
-// Next active after close, scoped to the closing tab's space. null = last tab of
-// its space, which callers treat as "refuse to close".
+// Next active after close, scoped to the closing tab's space. -1 = the space
+// becomes empty (activeId parks on the empty state); null = unknown tab id.
 export function nextActiveInSpace(
   tabs: Tab[],
   closingId: number,
@@ -168,7 +168,7 @@ export function nextActiveInSpace(
   const closing = tabs.find((t) => t.id === closingId);
   if (!closing) return null;
   const sameSpace = tabs.filter((t) => t.spaceId === closing.spaceId);
-  if (sameSpace.length <= 1) return null;
+  if (sameSpace.length <= 1) return -1;
   const idx = sameSpace.findIndex((t) => t.id === closingId);
   return (sameSpace[idx - 1] ?? sameSpace[idx + 1]).id;
 }
@@ -194,46 +194,24 @@ export function reorderTabsByGap(
   return next;
 }
 
-function coldTerminalTab(
-  tabId: number,
-  leafId: number,
-  spaceId: string,
-  cwd?: string,
-): TerminalTab {
-  return {
-    id: tabId,
-    kind: "terminal",
-    spaceId,
-    cold: true,
-    title: cwd ? basename(cwd) : "shell",
-    cwd,
-    paneTree: { kind: "leaf", id: leafId, cwd },
-    activeLeafId: leafId,
-  };
-}
-
-// Plans the removal of a deleted space's tabs while keeping the invariant that
-// the now-active `fallbackSpaceId` always has at least one tab (a cold one is
-// spawned when it would be left empty). Returns null when nothing to remove.
+// Plans the removal of a deleted space's tabs. An empty fallback space stays
+// empty (activeId parks on -1); the user opens a module via + instead of
+// getting an auto-spawned terminal. Returns null when nothing to remove.
 export function planSpaceRemoval(
   tabs: Tab[],
   currentActiveId: number,
   spaceId: string,
   fallbackSpaceId: string,
-  fallbackCwd: string | undefined,
-  allocId: () => number,
 ): { tabs: Tab[]; disposeLeafIds: number[]; activeId: number } | null {
   const removed = tabs.filter((t) => t.spaceId === spaceId);
   if (removed.length === 0) return null;
   const disposeLeafIds = removed
     .filter((t) => t.kind === "terminal")
     .flatMap((t) => leafIds((t as TerminalTab).paneTree));
-  let next = tabs.filter((t) => t.spaceId !== spaceId);
+  const next = tabs.filter((t) => t.spaceId !== spaceId);
   let activeId = currentActiveId;
   if (!next.some((t) => t.spaceId === fallbackSpaceId)) {
-    const tabId = allocId();
-    next = [...next, coldTerminalTab(tabId, allocId(), fallbackSpaceId, fallbackCwd)];
-    activeId = tabId;
+    activeId = -1;
   } else if (!next.some((t) => t.id === currentActiveId)) {
     const inFallback = next.filter((t) => t.spaceId === fallbackSpaceId);
     activeId = inFallback[inFallback.length - 1].id;
@@ -241,27 +219,14 @@ export function planSpaceRemoval(
   return { tabs: next, disposeLeafIds, activeId };
 }
 
-export function useTabs(initial?: Partial<TerminalTab>) {
-  const [tabs, setTabs] = useState<Tab[]>(() => {
-    const tabId = 1;
-    const leafId = 2;
-    return [
-      {
-        id: tabId,
-        kind: "terminal",
-        spaceId: DEFAULT_SPACE_ID,
-        cold: true,
-        title: initial?.title ?? "shell",
-        cwd: initial?.cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd: initial?.cwd },
-        activeLeafId: leafId,
-      },
-    ];
-  });
-  const [activeId, setActiveId] = useState(1);
+export function useTabs() {
+  // Starts empty: boot either restores the persisted session or leaves the
+  // space empty; every tab is opened by the user via +.
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeId, setActiveId] = useState(-1);
   // Gates warming until boot resolves the restore, so no shell spawns before it.
   const [booted, setBooted] = useState(false);
-  const nextIdRef = useRef(3);
+  const nextIdRef = useRef(1);
   const activeSpaceIdRef = useRef(DEFAULT_SPACE_ID);
   const tabsRef = useRef(tabs);
   const activeIdRef = useRef(activeId);
@@ -293,30 +258,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   }, []);
 
   const replaceTabs = useCallback((next: Tab[], nextActiveId: number) => {
-    if (next.length === 0) return;
     setTabs(next);
     setActiveId(nextActiveId);
-  }, []);
-
-  // Appends a cold terminal tab to a space without stealing focus, so the
-  // overview can populate a space in place; it spawns when first opened.
-  const newTabInSpace = useCallback((spaceId: string, cwd?: string) => {
-    const tabId = nextIdRef.current++;
-    const leafId = nextIdRef.current++;
-    setTabs((curr) => [
-      ...curr,
-      {
-        id: tabId,
-        kind: "terminal",
-        spaceId,
-        cold: true,
-        title: cwd ? basename(cwd) : "shell",
-        cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
-        activeLeafId: leafId,
-      },
-    ]);
-    return tabId;
   }, []);
 
   // Reassigns a tab to another space. Returns true when the moved tab was active
@@ -332,8 +275,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ),
       );
       if (activeIdRef.current !== tabId) return false;
+      // -1 = origin space is now empty; follow the tab to its target space.
       const fallback = nextActiveInSpace(curr, tabId);
-      if (fallback !== null) {
+      if (fallback !== null && fallback !== -1) {
         setActiveId(fallback);
         return false;
       }
@@ -365,8 +309,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         return without;
       });
       if (!crossSpace || activeIdRef.current !== tabId) return false;
+      // -1 = origin space is now empty; follow the tab to its target space.
       const fallback = nextActiveInSpace(curr, tabId);
-      if (fallback !== null) {
+      if (fallback !== null && fallback !== -1) {
         setActiveId(fallback);
         return false;
       }
@@ -376,7 +321,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   const removeTabsForSpace = useCallback(
-    (spaceId: string, fallbackSpaceId: string, fallbackCwd?: string) => {
+    (spaceId: string, fallbackSpaceId: string) => {
       let toDispose: number[] = [];
       setTabs((curr) => {
         const plan = planSpaceRemoval(
@@ -384,8 +329,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           activeIdRef.current,
           spaceId,
           fallbackSpaceId,
-          fallbackCwd,
-          () => nextIdRef.current++,
         );
         if (!plan) return curr;
         toDispose = plan.disposeLeafIds;
@@ -641,13 +584,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       );
       if (!target) return curr;
       const fallback = nextActiveInSpace(curr, target.id);
-      if (fallback === null) {
-        return curr.map((t) =>
-          t.kind === "ai-diff" && t.approvalId === approvalId
-            ? { ...t, status: "approved" as AiDiffStatus }
-            : t,
-        );
-      }
+      if (fallback === null) return curr;
       const next = curr.filter((t) => t.id !== target.id);
       setActiveId((active) => (target.id === active ? fallback : active));
       return next;
@@ -963,9 +900,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
 
   const selectByIndex = useCallback(
     (idx: number, spaceId?: string) => {
-      const t = spaceId
-        ? pickTabBySpaceIndex(tabs, idx, spaceId)
-        : tabs[idx];
+      const t = spaceId ? pickTabBySpaceIndex(tabs, idx, spaceId) : tabs[idx];
       if (t) setActiveId(t.id);
     },
     [tabs],
@@ -1143,11 +1078,11 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     activeId,
     setActiveId,
     allocId,
+    booted,
     replaceTabs,
     moveTabToSpace,
     reorderTab,
     reorderTabByGap,
-    newTabInSpace,
     removeTabsForSpace,
     markBooted,
     setActiveSpaceForNewTabs,

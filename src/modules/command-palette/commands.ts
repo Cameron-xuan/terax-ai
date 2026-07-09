@@ -72,15 +72,12 @@ export function createCommandItems(
   const activePaneCount = activeTerminalTab
     ? leafIds(activeTerminalTab.paneTree).length
     : 0;
-  const onlyOneTab = ctx.tabs.length < 2;
   const noWorkspaceRoot = !ctx.explorerRoot && !ctx.home;
   const splitDisabled = !activeTerminalTab
     ? "No terminal tab"
     : activePaneCount >= MAX_PANES_PER_TAB
       ? "Pane limit"
       : undefined;
-  const closeDisabled =
-    onlyOneTab && activePaneCount < 2 ? "Last tab" : undefined;
 
   return [
     {
@@ -112,7 +109,14 @@ export function createCommandItems(
       id: "spaces.overview",
       title: "Spaces: Overview",
       group: "Spaces",
-      keywords: ["spaces", "sessions", "overview", "organize", "manage", "move"],
+      keywords: [
+        "spaces",
+        "sessions",
+        "overview",
+        "organize",
+        "manage",
+        "move",
+      ],
       icon: DashboardSquare01Icon,
       run: ctx.openSpacesOverview,
     },
@@ -130,8 +134,7 @@ export function createCommandItems(
       group: "Spaces" as const,
       keywords: ["space", "switch", "session", sp.name],
       icon: DashboardSquare01Icon,
-      disabledReason:
-        sp.id === ctx.activeSpaceId ? "Current space" : undefined,
+      disabledReason: sp.id === ctx.activeSpaceId ? "Current space" : undefined,
       run: () => ctx.switchSpace(sp.id),
     })),
     {
@@ -186,7 +189,6 @@ export function createCommandItems(
       keywords: ["close", "remove", "pane"],
       icon: Cancel01Icon,
       shortcutId: "tab.close",
-      disabledReason: closeDisabled,
       run: ctx.closeActiveTabOrPane,
     },
     {

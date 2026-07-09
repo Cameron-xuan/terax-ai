@@ -30,10 +30,10 @@ describe("nextActiveInSpace", () => {
     expect(nextActiveInSpace(tabs, 3)).toBe(2);
   });
 
-  it("returns null for the last tab of its space (refuse to close)", () => {
+  it("returns -1 for the last tab of its space (space becomes empty)", () => {
     const tabs = [term(1, "a"), term(2, "b")];
-    expect(nextActiveInSpace(tabs, 1)).toBeNull();
-    expect(nextActiveInSpace(tabs, 2)).toBeNull();
+    expect(nextActiveInSpace(tabs, 1)).toBe(-1);
+    expect(nextActiveInSpace(tabs, 2)).toBe(-1);
   });
 
   it("returns null for an unknown id", () => {

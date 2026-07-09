@@ -59,6 +59,7 @@ type Props = {
   onPathDeleted?: (path: string) => void;
   onRevealInTerminal?: (path: string) => void;
   onAttachToAgent?: (path: string) => void;
+  onOpenFolder?: () => void;
   gitStatus?: GitStatusSnapshot | null;
 };
 
@@ -190,6 +191,7 @@ export const FileExplorer = memo(
       onPathDeleted,
       onRevealInTerminal,
       onAttachToAgent,
+      onOpenFolder,
       gitStatus,
     },
     ref,
@@ -360,9 +362,22 @@ export const FileExplorer = memo(
             strokeWidth={1.5}
             className="text-muted-foreground"
           />
-          <div className="text-xs text-muted-foreground">
-            No current directory
-          </div>
+          <div className="text-xs text-muted-foreground">No folder opened</div>
+          {onOpenFolder && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-1 h-7 px-3 text-xs"
+                onClick={onOpenFolder}
+              >
+                Open Folder
+              </Button>
+              <div className="text-[10.5px] text-muted-foreground/60">
+                or cd to a folder in the terminal
+              </div>
+            </>
+          )}
         </div>
       );
     }

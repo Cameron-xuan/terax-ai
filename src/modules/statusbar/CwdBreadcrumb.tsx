@@ -117,11 +117,24 @@ export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
           </span>
         ))}
         <BreadcrumbItem>
-          <CurrentSegmentDropdown
-            label={current.label}
-            path={current.fullPath}
-            onCd={onCd}
-          />
+          {current.isHome ? (
+            // Home gets no subfolder dropdown: never enumerate the user's
+            // personal folder from the breadcrumb.
+            <BreadcrumbPage className="flex items-center gap-1 text-foreground">
+              <HugeiconsIcon
+                icon={Home03Icon}
+                className="size-3"
+                strokeWidth={1.75}
+              />
+              Home
+            </BreadcrumbPage>
+          ) : (
+            <CurrentSegmentDropdown
+              label={current.label}
+              path={current.fullPath}
+              onCd={onCd}
+            />
+          )}
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
@@ -137,6 +150,25 @@ function BreadcrumbSegment({
   isHome: boolean;
   onClick: () => void;
 }) {
+  // Home is a plain marker, never a navigation target: no cd-to-home
+  // shortcut, consistent with the explorer's home opt-in.
+  if (isHome) {
+    return (
+      <>
+        <BreadcrumbItem>
+          <Badge variant="outline" className="gap-1 text-muted-foreground">
+            <HugeiconsIcon
+              icon={Home03Icon}
+              className="size-3"
+              strokeWidth={1.75}
+            />
+            Home
+          </Badge>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator className="[&>svg]:size-3" />
+      </>
+    );
+  }
   return (
     <>
       <BreadcrumbItem>
@@ -146,14 +178,7 @@ function BreadcrumbSegment({
               variant="outline"
               className="gap-1 text-muted-foreground hover:text-foreground"
             >
-              {isHome ? (
-                <HugeiconsIcon
-                  icon={Home03Icon}
-                  className="size-3"
-                  strokeWidth={1.75}
-                />
-              ) : null}
-              {isHome ? "Home" : label}
+              {label}
             </Badge>
           </button>
         </BreadcrumbLink>

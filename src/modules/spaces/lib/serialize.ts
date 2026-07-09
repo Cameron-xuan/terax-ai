@@ -1,8 +1,3 @@
-import {
-  isLeaf,
-  type PaneNode,
-  type SplitDir,
-} from "@/modules/terminal/lib/panes";
 import type {
   EditorTab,
   MarkdownTab,
@@ -10,6 +5,11 @@ import type {
   Tab,
   TerminalTab,
 } from "@/modules/tabs/lib/useTabs";
+import {
+  isLeaf,
+  type PaneNode,
+  type SplitDir,
+} from "@/modules/terminal/lib/panes";
 
 export type SerializedNode =
   | { kind: "leaf"; cwd?: string; active?: boolean }
@@ -197,24 +197,6 @@ function hydrateTab(
     default:
       return null;
   }
-}
-
-export function freshTerminalTab(
-  spaceId: string,
-  cwd: string | null,
-  allocId: () => number,
-): TerminalTab {
-  const leafId = allocId();
-  return {
-    id: allocId(),
-    kind: "terminal",
-    spaceId,
-    cold: true,
-    title: cwd ? basename(cwd) : "shell",
-    cwd: cwd ?? undefined,
-    paneTree: { kind: "leaf", id: leafId, ...(cwd && { cwd }) },
-    activeLeafId: leafId,
-  };
 }
 
 export function hydrateTabs(

@@ -5,7 +5,6 @@ import {
 } from "@/components/ui/resizable";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getLaunchDir } from "@/lib/launchDir";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { usePresence } from "@/lib/usePresence";
 import { useZoom } from "@/lib/useZoom";
@@ -32,7 +31,12 @@ import {
   NewEditorDialog,
   useEditorFileSync,
 } from "@/modules/editor";
-import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
+import {
+  FileExplorer,
+  type FileExplorerHandle,
+  isSamePath,
+  visibleExplorerRoot,
+} from "@/modules/explorer";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import {
   Header,
@@ -87,10 +91,10 @@ import {
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
+import { EmptySpaceState } from "./components/EmptySpaceState";
 import {
   TOGGLE_BLOCK_INPUT_EVENT,
   WorkspaceInputBar,
@@ -106,11 +110,11 @@ export default function App() {
     activeId,
     setActiveId,
     allocId,
+    booted,
     replaceTabs,
     moveTabToSpace,
     reorderTab,
     reorderTabByGap,
-    newTabInSpace,
     removeTabsForSpace,
     markBooted,
     setActiveSpaceForNewTabs,
@@ -139,7 +143,7 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
+  } = useTabs();
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
@@ -240,7 +244,13 @@ export default function App() {
       .spaces.find((s) => s.id === activeSpaceId);
     if (meta) void adoptWorkspaceEnv(meta.env);
     const inSpace = tabsRef.current.filter((t) => t.spaceId === activeSpaceId);
-    if (inSpace.length === 0) return;
+    if (inSpace.length === 0) {
+      // Empty space: no tab may stay active (it would keep rendering a tab
+      // from the previous space). -1 matches nothing; the surface shows the
+      // empty state until the user opens a module via +.
+      setActiveId(-1);
+      return;
+    }
     // Keep the active tab if it already belongs to the newly active space (a
     // cross-space jump set it explicitly); else fall to the space's last tab.
     if (inSpace.some((t) => t.id === activeId)) return;
@@ -307,10 +317,20 @@ export default function App() {
   useEditorFileSync({ tabs, tabsRef, editorRefs });
   useThemeFileEditing({ tabsRef, openFileTab });
 
-  const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
-    activeTab,
-    tabs,
-    launchCwd ?? home,
+  const { explorerRoot, inheritedCwdForNewTab, setPickedRoot, pickedRoot } =
+    useWorkspaceCwd(
+      activeTab,
+      spaceTabs,
+      activeSpaceId ?? DEFAULT_SPACE_ID,
+      launchCwd ?? home,
+    );
+  // The explorer never auto-lists the home directory (the default root when
+  // nothing was chosen); the user picks a folder or opts into home instead.
+  const [homeRootAllowed, setHomeRootAllowed] = useState(false);
+  const explorerRootPath = visibleExplorerRoot(
+    explorerRoot,
+    home,
+    homeRootAllowed,
   );
 
   useWindowTitle(activeTab, explorerRoot);
@@ -526,6 +546,31 @@ export default function App() {
       }, 80);
     },
     [newTab],
+  );
+
+  const handleOpenFolder = useCallback(() => {
+    void (async () => {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const picked = await open({
+        directory: true,
+        defaultPath: home ?? undefined,
+      });
+      if (typeof picked !== "string") return;
+      const path = picked.replace(/\\/g, "/");
+      if (home && isSamePath(path, home)) setHomeRootAllowed(true);
+      // Never spawn a terminal for a folder pick: cd the active terminal if
+      // there is one, otherwise just move the workspace root.
+      if (activeTerminalTab) sendCd(path);
+      else setPickedRoot(path);
+    })();
+  }, [home, activeTerminalTab, sendCd, setPickedRoot]);
+
+  const navigateWorkspace = useCallback(
+    (path: string) => {
+      if (activeTerminalTab) sendCd(path);
+      else setPickedRoot(path);
+    },
+    [activeTerminalTab, sendCd, setPickedRoot],
   );
 
   const handleOpenFile = useCallback(
@@ -848,17 +893,13 @@ export default function App() {
 
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
-      const all = tabsRef.current;
-      const tab = all.find(
+      const tab = tabsRef.current.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
       if (!tab || tab.kind !== "terminal") return;
-      // Last pane of the last tab: quit instead of respawning a shell.
-      if (leafIds(tab.paneTree).length === 1 && all.length === 1) {
-        void getCurrentWindow().close();
-      } else {
-        closePaneByLeaf(leafId);
-      }
+      // Closing the last pane of the last tab lands on the empty state; the
+      // app never quits on its own when a shell exits.
+      closePaneByLeaf(leafId);
     },
     [closePaneByLeaf],
   );
@@ -913,19 +954,17 @@ export default function App() {
       env: workspaceEnv,
     });
     setActiveSpaceForNewTabs(meta.id);
-    newTab(activeCwd ?? undefined);
+    // No auto terminal: the space opens empty and the user picks a module
+    // via +. The space-switch effect parks activeId on -1.
     setActive(meta.id);
     return meta.id;
-  }, [activeCwd, home, workspaceEnv, newTab, setActiveSpaceForNewTabs]);
+  }, [activeCwd, home, workspaceEnv, setActiveSpaceForNewTabs]);
 
   const handleDeleteSpace = useCallback(
     (id: string) => {
       const nextSpaceId = useSpaces.getState().remove(id);
       if (!nextSpaceId) return;
-      const root = useSpaces
-        .getState()
-        .spaces.find((s) => s.id === nextSpaceId)?.root;
-      removeTabsForSpace(id, nextSpaceId, root ?? undefined);
+      removeTabsForSpace(id, nextSpaceId);
     },
     [removeTabsForSpace],
   );
@@ -949,16 +988,6 @@ export default function App() {
     [reorderTab],
   );
 
-  const handleNewTabInSpace = useCallback(
-    (spaceId: string) => {
-      const root = useSpaces
-        .getState()
-        .spaces.find((s) => s.id === spaceId)?.root;
-      newTabInSpace(spaceId, root ?? undefined);
-    },
-    [newTabInSpace],
-  );
-
   const jumpToTab = useCallback(
     (tabId: number) => {
       const t = tabsRef.current.find((x) => x.id === tabId);
@@ -977,9 +1006,7 @@ export default function App() {
       tabs={tabs}
       onNewSpace={() => void handleNewSpace()}
       onDeleteSpace={handleDeleteSpace}
-      onNewTabInSpace={handleNewTabInSpace}
       onJumpTab={jumpToTab}
-      onCloseTab={handleClose}
       onMoveTabToSpace={handleMoveTab}
       onReorderTab={handleReorderTab}
       onReorderSpaces={(ids) => useSpaces.getState().reorder(ids)}
@@ -1143,7 +1170,7 @@ export default function App() {
                     {sidebarView === "explorer" ? (
                       <FileExplorer
                         ref={explorerRef}
-                        rootPath={explorerRoot}
+                        rootPath={explorerRootPath}
                         gitStatus={
                           explorerGitDecorations ? sourceControl.status : null
                         }
@@ -1153,6 +1180,7 @@ export default function App() {
                         onPathDeleted={handlePathDeleted}
                         onRevealInTerminal={cdInNewTab}
                         onAttachToAgent={handleAttachFileToAgent}
+                        onOpenFolder={handleOpenFolder}
                       />
                     ) : (
                       <SourceControlPanel
@@ -1196,6 +1224,9 @@ export default function App() {
                       onGitHistorySearchHandle={setGitHistoryHandle}
                       onSetMarkdownView={setMarkdownView}
                     />
+                    {booted && spaceTabs.length === 0 ? (
+                      <EmptySpaceState />
+                    ) : null}
                   </div>
 
                   <WorkspaceInputBar
@@ -1216,10 +1247,10 @@ export default function App() {
 
           {!zenMode && (
             <StatusBar
-              cwd={activeCwd}
+              cwd={activeCwd ?? pickedRoot}
               filePath={activeFilePath}
               home={home}
-              onCd={sendCd}
+              onCd={navigateWorkspace}
               onWorkspaceChange={handleWorkspaceChange}
               onOpenMini={openMini}
               hasComposer={hasComposer}
